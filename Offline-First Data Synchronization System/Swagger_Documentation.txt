@@ -1,0 +1,621 @@
+OFFLINE-FIRST DATA SYNCHRONIZATION SYSTEM
+Swagger / OpenAPI API Documentation
+
+============================================================
+1. DOCUMENT OVERVIEW
+============================================================
+
+This document provides a practical Swagger/OpenAPI testing and documentation
+guide for the Offline-First Data Synchronization System.
+
+It covers:
+- Authentication
+- Record management
+- Offline synchronization
+- Conflict handling
+- Synchronization history
+- API verification
+- Frontend/backend integration workflow
+
+============================================================
+2. API DOCUMENTATION URLS
+============================================================
+
+Swagger UI:
+http://127.0.0.1:8000/docs
+
+ReDoc:
+http://127.0.0.1:8000/redoc
+
+OpenAPI JSON:
+http://127.0.0.1:8000/openapi.json
+
+
+============================================================
+3. RUNNING THE BACKEND
+============================================================
+
+From the backend directory:
+
+cd C:\Users\asus\Desktop\offline-first-data-synchronization-system\backend
+
+Activate virtual environment:
+
+.\.venv\Scripts\Activate.ps1
+
+Start FastAPI:
+
+uvicorn app.main:app --reload
+
+Expected server:
+
+http://127.0.0.1:8000
+
+
+============================================================
+4. SWAGGER AUTHENTICATION WORKFLOW
+============================================================
+
+Protected endpoints require a valid JWT access token.
+
+Recommended workflow:
+
+1. Open Swagger UI.
+2. Execute the login endpoint.
+3. Enter a valid username and password.
+4. Copy the returned access_token.
+5. Click the Authorize button in Swagger.
+6. Enter:
+
+Bearer YOUR_ACCESS_TOKEN
+
+7. Execute protected endpoints such as Records and Synchronization.
+
+
+============================================================
+5. AUTHENTICATION API
+============================================================
+
+POST /api/v1/auth/register
+--------------------------
+Purpose:
+Register a new user.
+
+Example request:
+
+{
+  "username": "swaggeruser",
+  "email": "swagger@example.com",
+  "password": "Test@12345"
+}
+
+
+POST /api/v1/auth/login
+-----------------------
+Purpose:
+Authenticate a user and obtain a JWT access token.
+
+Example request:
+
+{
+  "username": "offline_test",
+  "password": "Test@12345"
+}
+
+
+GET /api/v1/auth/me
+-------------------
+Purpose:
+Return the currently authenticated user.
+
+Authentication:
+Bearer JWT required.
+
+
+PUT /api/v1/auth/profile
+------------------------
+Purpose:
+Update the authenticated user's profile email.
+
+Example:
+
+{
+  "email": "updated@example.com"
+}
+
+
+PUT /api/v1/auth/change-password
+--------------------------------
+Purpose:
+Change the authenticated user's password.
+
+Example:
+
+{
+  "current_password": "Test@12345",
+  "new_password": "NewTest@12345"
+}
+
+
+============================================================
+6. RECORDS API
+============================================================
+
+POST /records
+-------------
+Purpose:
+Create a record.
+
+Example:
+
+{
+  "title": "Swagger Test Record",
+  "content": "Created through Swagger"
+}
+
+
+GET /records
+------------
+Purpose:
+Retrieve a paginated list of records.
+
+Supported query parameters:
+- page
+- page_size
+- search
+- include_deleted
+
+Example:
+
+GET /records?page=1&page_size=20&include_deleted=false
+
+
+GET /records/{record_id}
+------------------------
+Purpose:
+Retrieve one record by ID.
+
+
+PUT /records/{record_id}
+------------------------
+Purpose:
+Update a record using the expected record version.
+
+Example:
+
+{
+  "title": "Updated Swagger Record",
+  "content": "Updated content",
+  "version": 1
+}
+
+The version is important for optimistic concurrency and
+offline synchronization.
+
+
+DELETE /records/{record_id}
+---------------------------
+Purpose:
+Delete a record using its expected version.
+
+Example:
+
+DELETE /records/{record_id}?version=2
+
+
+============================================================
+7. SYNCHRONIZATION API
+============================================================
+
+POST /sync/batch
+----------------
+Purpose:
+Process a batch of offline operations.
+
+Each operation contains:
+- sync_id
+- record_id
+- operation
+- client_version
+- payload
+- client_timestamp
+
+
+Example update request:
+
+{
+  "operations": [
+    {
+      "sync_id": "swagger-sync-001",
+      "record_id": "550e8400-e29b-41d4-a716-446655440000",
+      "operation": "update",
+      "client_version": 2,
+      "payload": {
+        "title": "Offline Sync Version 3",
+        "content": "Successfully synchronized from the offline client."
+      },
+      "client_timestamp": "2026-09-27T22:05:00Z"
+    }
+  ]
+}
+
+
+Successful synchronization response:
+
+{
+  "results": [
+    {
+      "sync_id": "swagger-sync-001",
+      "record_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "success",
+      "conflict_status": "none",
+      "message": "Record updated successfully",
+      "server_version": 3,
+      "error_details": null
+    }
+  ],
+  "total_operations": 1,
+  "successful": 1,
+  "failed": 0,
+  "conflicts": 0
+}
+
+
+============================================================
+8. CONFLICT HANDLING
+============================================================
+
+The synchronization system uses record versions to detect
+stale offline updates.
+
+If the client version does not match the server version,
+the operation can be returned as a conflict instead of
+overwriting newer server data.
+
+Example conflict result:
+
+{
+  "results": [
+    {
+      "sync_id": "sync-update-002",
+      "record_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "conflict",
+      "conflict_status": "resolved",
+      "message": "Operation already processed",
+      "server_version": null,
+      "error_details": "Client version does not match server version"
+    }
+  ],
+  "total_operations": 1,
+  "successful": 0,
+  "failed": 0,
+  "conflicts": 1
+}
+
+
+============================================================
+9. SYNCHRONIZATION HISTORY
+============================================================
+
+GET /sync/history
+-----------------
+Purpose:
+Return synchronization history records.
+
+Example:
+
+GET /sync/history?page=1&page_size=100
+
+
+During project testing, synchronization history contained:
+
+1. sync-update-002
+   Operation: update
+   Status: conflict
+   Conflict status: resolved
+
+2. sync-update-003
+   Operation: update
+   Status: success
+   Conflict status: none
+
+3. sync-delete-001
+   Operation: delete
+   Status: success
+   Conflict status: none
+
+
+============================================================
+10. RECORD VERSIONING EXAMPLE
+============================================================
+
+Tested record:
+
+550e8400-e29b-41d4-a716-446655440000
+
+Observed flow:
+
+1. Client sends client_version = 2.
+2. Server accepts the update.
+3. Server returns server_version = 3.
+4. A subsequent delete increments the record version to 4.
+5. The record is marked as deleted.
+
+This demonstrates optimistic version checking.
+
+The client sends the version it last knows.
+The server compares it with the current server version
+before applying the operation.
+
+
+============================================================
+11. IMPORTANT HTTP STATUS CODES
+============================================================
+
+200
+Request processed successfully.
+
+201
+Resource created successfully, where applicable.
+
+400
+Invalid request or synchronization payload.
+
+401
+Authentication required or access token is invalid/missing.
+
+403
+Authenticated user is not permitted to perform the operation.
+
+404
+Requested resource was not found.
+
+409
+Conflict response, where exposed by the API.
+
+422
+Request validation failed.
+
+500
+Unexpected server-side error.
+
+
+============================================================
+12. COMMON SWAGGER TESTING ISSUES
+============================================================
+
+401 NOT AUTHENTICATED
+---------------------
+Possible causes:
+- Swagger is not authorized.
+- Bearer token is missing.
+- Token has expired.
+- Invalid token.
+
+Solution:
+Click Authorize and provide a valid JWT token.
+
+
+CORS ERROR FROM FRONTEND
+------------------------
+Example:
+
+Access to XMLHttpRequest has been blocked by CORS policy.
+
+Solution:
+Verify FastAPI CORS configuration permits the frontend origin,
+for example:
+
+http://localhost:5173
+
+
+LOGIN RETURNS 401
+-----------------
+Verify:
+- Username
+- Password
+- User active status
+- Password hash
+- Backend database connection
+
+The tested offline_test user was active and the password
+Test@12345 was verified successfully.
+
+
+SWAGGER PAGE DOES NOT OPEN
+--------------------------
+Verify Uvicorn is running on port 8000.
+
+Open:
+
+http://127.0.0.1:8000/docs
+
+
+============================================================
+13. END-TO-END SWAGGER TEST SEQUENCE
+============================================================
+
+1. Start MySQL and Redis.
+2. Start the FastAPI backend.
+3. Open Swagger UI.
+4. Register a test user or use an existing active user.
+5. Login and obtain the JWT access token.
+6. Authorize Swagger with the Bearer token.
+7. Create a record using POST /records.
+8. Retrieve records using GET /records.
+9. Retrieve the record using GET /records/{record_id}.
+10. Update the record using PUT /records/{record_id}.
+11. Send an offline update using POST /sync/batch.
+12. Test a stale client_version to verify conflict detection.
+13. Delete a record using DELETE /records/{record_id}.
+14. Open GET /sync/history.
+15. Verify the synchronization entries.
+16. Verify the React frontend:
+    - Dashboard
+    - Records
+    - Sync History
+    - Conflicts
+    - Profile
+
+
+============================================================
+14. API ARCHITECTURE SUMMARY
+============================================================
+
+The backend is organized around three main functional areas:
+
+1. Authentication
+   - User registration
+   - Login
+   - JWT authentication
+   - User profile
+   - Password change
+
+2. Record Management
+   - Create
+   - Read
+   - Update
+   - Delete
+   - Record versioning
+
+3. Offline Synchronization
+   - Batch synchronization
+   - Version checking
+   - Conflict detection
+   - Conflict resolution status
+   - Synchronization history
+
+JWT authentication protects application data endpoints.
+
+Records use a version field to support optimistic concurrency.
+
+Synchronization accepts client operations in batches and records
+the outcome for later inspection through synchronization history.
+
+
+============================================================
+15. FRONTEND INTEGRATION
+============================================================
+
+The React frontend communicates with the FastAPI backend.
+
+Main frontend areas:
+
+Login
+Register
+Dashboard
+Records
+Synchronization History
+Conflicts
+Profile
+
+Authentication flow:
+
+Login
+  |
+  v
+JWT access token
+  |
+  v
+localStorage
+  |
+  v
+Axios Authorization header
+  |
+  v
+Protected FastAPI endpoints
+
+
+Record flow:
+
+Create/Edit/Delete Record
+  |
+  v
+React frontend
+  |
+  v
+FastAPI Records API
+  |
+  v
+MySQL
+
+
+Offline synchronization flow:
+
+Offline operation
+  |
+  v
+Local client queue
+  |
+  v
+POST /sync/batch
+  |
+  v
+Version comparison
+  |
+  +---- Success
+  |
+  +---- Conflict
+  |
+  v
+Synchronization History
+
+
+============================================================
+16. INTERVIEW EXPLANATION
+============================================================
+
+A concise project explanation:
+
+"The backend is built with FastAPI and exposes interactive OpenAPI
+documentation through Swagger. Authentication uses JWT. Records are
+versioned so offline clients can send their last known version during
+synchronization. The synchronization API processes batches of offline
+operations, detects stale versions, records conflicts, and exposes
+synchronization history. Swagger is used to verify each API independently
+before integrating it with the React frontend."
+
+
+============================================================
+17. FINAL VERIFICATION CHECKLIST
+============================================================
+
+[ ] Backend starts successfully
+[ ] Swagger opens
+[ ] Register API works
+[ ] Login API works
+[ ] JWT authorization works
+[ ] GET /auth/me works
+[ ] Create record works
+[ ] List records works
+[ ] Get record works
+[ ] Update record works
+[ ] Delete record works
+[ ] Batch synchronization works
+[ ] Conflict detection works
+[ ] Synchronization history works
+[ ] Frontend login works
+[ ] Dashboard loads API data
+[ ] Records page works
+[ ] Sync History page works
+[ ] Conflicts page works
+[ ] Profile page works
+[ ] Docker configuration is ready
+
+
+============================================================
+18. NOTES
+============================================================
+
+This document reflects the endpoints, request/response examples,
+synchronization results, and frontend/backend workflow established
+during the current project testing.
+
+If the backend implementation changes, confirm the exact current
+schemas and endpoints from:
+
+http://127.0.0.1:8000/openapi.json
+
+============================================================
+END OF DOCUMENT
+============================================================
